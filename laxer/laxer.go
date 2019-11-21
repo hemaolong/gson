@@ -2,7 +2,7 @@
  * @Author: maolong.he@gmail.com
  * @Date: 2019-11-20 09:00:20
  * @Last Modified by: maolong.he@gmail.com
- * @Last Modified time: 2019-11-21 10:20:37
+ * @Last Modified time: 2019-11-21 18:52:06
  */
 
 package laxer
@@ -16,7 +16,7 @@ type TokenType byte
 
 const (
 	TokenString TokenType = 's'
-	TokenKey    TokenType = 'k'
+	// TokenKey    TokenType = 'k'
 	// TokenEOF    TokenType = 'e'
 	// TokenValue  TokenType = 'v'
 
@@ -26,8 +26,8 @@ const (
 	TokenMapBegin TokenType = '{'
 	TokenMapEnd   TokenType = '}'
 
-	TokenSplitor TokenType = ','
-	TokenColon   TokenType = ':'
+	TokenComma TokenType = ','
+	// TokenColon TokenType = ':'
 
 	TokenError TokenType = 'E'
 )
@@ -35,13 +35,14 @@ const (
 type Token struct {
 	Type  TokenType
 	Value string
+
+	// 作为一个类型Token，表示类型的Type：string int？
+	Ultra string
 }
 
 type Laxer struct {
-	input       string
-	start       int
-	pos         int
-	preIsEscape bool
+	input   string
+	nextPos int
 
 	stackPos int
 	tokens   []*Token
@@ -55,6 +56,13 @@ func (self *TokenType) String() string {
 
 func (self *Token) String() string {
 	if self.Type == TokenString {
+		if len(self.Ultra) > 0 {
+			return fmt.Sprintf("{'%c' '%s' '%s'}", self.Type, self.Value, self.Ultra)
+		} else {
+			return fmt.Sprintf("{'%c' '%s'}", self.Type, self.Value)
+		}
+	}
+	if self.Type == TokenError {
 		return fmt.Sprintf("{'%c' '%s'}", self.Type, self.Value)
 	}
 	return fmt.Sprintf("{'%c'}", self.Type)
@@ -70,10 +78,29 @@ func (self *Laxer) String() string {
 	return fmt.Sprintf("%v", self.tokens)
 }
 
+// 只有格式 laxer需要调用，将带':'的字符串类型拆分成两个Token
+func (self *Laxer) InitFormat() {
+	self.stackPos = 0
+
+	for _, v := range self.tokens {
+		if v.Type == TokenString {
+			tmp := strings.Split(v.Value, ":")
+			v.Value = tmp[0]
+			if len(tmp) >= 2 {
+				v.Ultra = tmp[1]
+			} else {
+				// fmt.Println(tmp)
+				// 数组类型才会缺失，补齐
+				v.Ultra = tmp[0]
+			}
+		}
+	}
+}
+
 func (self *Laxer) LastError() *Token {
 	l := len(self.tokens)
 	if l == 0 {
-		return &Token{TokenError, "empty token list"}
+		return nil
 	}
 
 	t := self.tokens[l-1]
@@ -83,15 +110,17 @@ func (self *Laxer) LastError() *Token {
 	return nil
 }
 
-// func (self *Laxer) PeekFirst() *Token {
-// 	l := len(self.tokens)
-// 	if l == 0 {
-// 		return nil
-// 	}
-
-// 	t := self.tokens[0]
-// 	return t
-// }
+func (self *Laxer) peekLaxStrPos() string {
+	start := self.nextPos - 10
+	if start < 0 {
+		start = 0
+	}
+	end := start + 20
+	if end > len(self.input) {
+		end = len(self.input)
+	}
+	return self.input[start:end]
+}
 
 func (self *Laxer) PopFirst() *Token {
 	l := len(self.tokens)
@@ -116,85 +145,60 @@ func (self *Laxer) IncrTokenPos(v int) {
 	self.stackPos += v
 }
 
-func (self *Laxer) push(t TokenType) {
-	if t == TokenString {
-		l, ok := self.left()
-		if ok {
-			trimed := strings.TrimSpace(l)
-			if len(trimed) > 0 {
-				v := &Token{Type: t, Value: strings.TrimSpace(l)}
-				// fmt.Println("push token|", v)
-				self.tokens = append(self.tokens, v)
+func (self *Laxer) GetStackPos() int {
+	return self.stackPos
+}
+
+func (self *Laxer) SetStackPos(i int) {
+	self.stackPos = i
+}
+
+func (self *Laxer) push(t *Token) {
+	// fmt.Println("push|", t)
+	self.tokens = append(self.tokens, t)
+}
+
+func (self *Laxer) pushError(err error) {
+	self.tokens = append(self.tokens, &Token{Type: TokenError, Value: err.Error()})
+}
+
+func (self *Laxer) genToken() *Token {
+	ls := len(self.input)
+	if self.nextPos >= ls {
+		return nil
+	}
+
+	preIsEscape := false
+	for k := self.nextPos; k < ls; k++ {
+		if preIsEscape {
+			preIsEscape = false
+			continue
+		}
+		char := byte(self.input[k])
+		preIsEscape = isEscape(char)
+		if preIsEscape {
+			continue
+		}
+		preIsEscape = false
+
+		if !isPlain(TokenType(char)) {
+			if k > self.nextPos {
+				// 前面有剩余未解析字符，需要弹出内容Token
+				scrToken := strings.TrimSpace(self.input[self.nextPos:k])
+				if len(scrToken) > 0 {
+					t := &Token{Type: TokenString, Value: scrToken}
+					self.nextPos = k
+					return t
+				}
 			}
-		}
-	} else {
-		self.tokens = append(self.tokens, &Token{Type: t})
-	}
-}
-
-func (self *Laxer) pushWithValue(t TokenType, v string) {
-	self.tokens = append(self.tokens, &Token{Type: t, Value: v})
-}
-
-// 有待解析的字符串是否以s开头
-func (self *Laxer) leftHasPrefix(prefix string) bool {
-	left := self.input[self.pos:]
-	return strings.HasPrefix(left, prefix)
-}
-
-// 去掉前导空白字符
-func (self *Laxer) incrPos(v int) {
-	self.pos += v
-}
-
-func (self *Laxer) ignore() {
-	self.start = self.pos
-}
-
-func (self *Laxer) next() (byte, bool) {
-	if self.pos >= len(self.input) {
-		return 0, false
-	}
-
-	self.pos++
-	return self.input[self.pos-1], true
-}
-
-func (self *Laxer) nextSkipEscape() (byte, bool) {
-	c, ok := self.next()
-	if self.preIsEscape {
-		self.preIsEscape = false
-		c, ok = self.next()
-	} else {
-		if isEscape(c) {
-			self.preIsEscape = true
-			c, ok = self.next()
+			// fmt.Println("i am char ", fmt.Sprintf("%c", char))
+			t := &Token{Type: TokenType(char)}
+			self.nextPos = k + 1
+			return t
 		}
 	}
-
-	return c, ok
+	return nil
 }
-
-func (self *Laxer) left() (string, bool) {
-	if self.pos > self.start+1 && self.pos < len(self.input) {
-		s := self.input[self.start : self.pos-1]
-		self.start = self.pos
-		return s, true
-	}
-	return "", false
-}
-
-func (self *Laxer) peekToLast() string {
-	return self.input[self.pos:]
-}
-
-// func (self *Laxer) peek() (byte, bool) {
-// 	if self.pos >= len(self.input) {
-// 		return 0, false
-// 	}
-
-// 	return self.input[self.pos], true
-// }
 
 func isEscape(c byte) bool {
 	return c == '\\'
@@ -203,127 +207,107 @@ func isEscape(c byte) bool {
 func isPlain(c TokenType) bool {
 	return c != TokenArrayBegin && c != TokenArrayEnd &&
 		c != TokenMapBegin && c != TokenMapEnd &&
-		c != TokenSplitor && c != TokenColon
+		c != TokenComma
 }
 
 func (self *Laxer) run() {
-	self.laxBegin()
-	// l.pushWithValue(TokenEOF, "EOF")
+	self.laxBegin(self.genToken())
 }
 
-func (self *Laxer) laxBegin() {
-	c, ok := self.nextSkipEscape()
-	if !ok {
-		return
-	}
-	self.incrPos(-1)
-
-	switch TokenType(c) {
+func (self *Laxer) laxBegin(cur *Token) {
+	self.push(cur)
+	switch cur.Type {
 	case TokenArrayBegin:
 		self.laxArray()
 
 	case TokenMapBegin:
 		self.laxMap()
-
-	case TokenSplitor:
-		self.incrPos(1)
-		self.laxToken()
+	case TokenString:
+		// fmt.Println("nothing todo")
 	default:
-		// self.incrPos(-1)
-		self.laxToken()
+		panic(cur)
 	}
+	// fmt.Println("push token|", t)
 }
 
 func (self *Laxer) laxArray() {
-	self.next() // skip '['
-	self.ignore()
-	self.push(TokenArrayBegin)
 	for {
-		self.laxBegin()
-
-		c, ok := self.nextSkipEscape()
-		if !ok {
-			break
-		}
-		if TokenType(c) == TokenArrayEnd {
-			// fmt.Println("->>>>>>", self.tokens)
-			break
+		nextEle := self.genToken()
+		if nextEle == nil {
+			self.pushError(fmt.Errorf(`expect array element but found EOF '%s'...`, self.peekLaxStrPos()))
+			return
 		}
 
+		if nextEle.Type == TokenArrayEnd {
+			self.push(nextEle)
+			return
+		}
+
+		self.laxBegin(nextEle)
+		nextEle = self.genToken()
+		// self.push(nextEle)
+		if nextEle.Type == TokenArrayEnd {
+			self.push(nextEle)
+			return
+		}
+		if nextEle.Type != TokenComma {
+			self.pushError(fmt.Errorf(`expect array splititor:"%c", but found "%v"`, TokenComma, nextEle))
+			return
+		}
 	}
-	self.push(TokenArrayEnd)
-
 }
 
 func (self *Laxer) laxMap() {
-	self.next() // skip '{'
-	self.ignore()
-	self.push(TokenMapBegin)
+	nextEle := self.genToken()
 	for {
-		//
-		self.laxBegin()
+		if nextEle == nil || self.LastError() != nil {
+			return
+		}
+		// 剩余字符应该是',' or '?'
+		if nextEle.Type == TokenMapEnd {
+			self.push(nextEle)
+			return
+		}
 
-		c, ok := self.nextSkipEscape()
-		if !ok {
-			break
+		self.laxBegin(nextEle)
+		nextEle = self.genToken()
+		if self.LastError() != nil {
+			return
 		}
-		if TokenType(c) == TokenMapEnd {
-			break
+		if nextEle == nil {
+			self.pushError(fmt.Errorf(`expect map end but found EOF '%s'...`, self.peekLaxStrPos()))
+			return
 		}
-		self.incrPos(-1)
+		if nextEle.Type == TokenMapEnd {
+			self.push(nextEle)
+			return
+		}
+		if nextEle.Type == TokenComma {
+			nextEle = self.genToken()
+			continue
+		}
 	}
-	self.push(TokenMapEnd)
-
-	// c, ok := l.next()
-	// if !ok {
-	// 	l.pushWithValue(TokenError, "map value expected but found EOF")
-	// }
-
-	// if TokenType(c) == TokenMapEnd {
-	// 	l.push(TokenMapEnd)
-	// 	break
-	// }
 }
 
-// func laxToken(l *Laxer) {
+// 取出一个单词
+// func (self *Laxer) laxToken() {
 // 	for {
-// 		c, ok := l.nextSkipEscape()
+// 		c, ok := self.nextSkipEscape()
 // 		if !ok {
-// 			l.pushWithValue(TokenEOF, "expect value but found EOF")
-// 			return
+// 			break
 // 		}
 
-// 		if !isPlain(TokenType(c)) {
-// 			l.incrPos(-1)
-// 			fmt.Println("to end|", l.peekToLast())
+// 		tc := TokenType(c)
+// 		if !isPlain(tc) {
+// 			self.push(TokenString)
+// 			self.ignore()
 
-// 			l.push(TokenValue)
-// 			l.incrPos(1)
-// 			laxBegin(l)
-// 			return
+// 			if tc == TokenColon {
+// 				continue
+// 			}
+
+// 			self.incrPos(-1)
+// 			break
 // 		}
 // 	}
 // }
-
-// 取出一个单词
-func (self *Laxer) laxToken() {
-	for {
-		c, ok := self.nextSkipEscape()
-		if !ok {
-			break
-		}
-
-		tc := TokenType(c)
-		if !isPlain(tc) {
-			self.push(TokenString)
-			self.ignore()
-
-			if tc == TokenColon {
-				continue
-			}
-
-			self.incrPos(-1)
-			break
-		}
-	}
-}
