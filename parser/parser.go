@@ -2,7 +2,7 @@
  * @Author: maolong.he@gmail.com
  * @Date: 2019-11-20 09:08:17
  * @Last Modified by: maolong.he@gmail.com
- * @Last Modified time: 2019-11-21 18:50:40
+ * @Last Modified time: 2019-11-21 20:14:18
  */
 
 package parser
@@ -43,12 +43,14 @@ type Parser struct {
 	lastError error
 }
 
-func Parse(format *laxer.Laxer, content *laxer.Laxer) *Parser {
-	return &Parser{format: format, content: content}
+func Parse(format *laxer.Laxer) *Parser {
+	return &Parser{format: format}
 }
 
-func (self *Parser) Parse(buf *bytes.Buffer) {
+func (self *Parser) Parse(content *laxer.Laxer, buf *bytes.Buffer) {
 	self.format.InitFormat()
+	self.content = content
+
 	first := self.content.PeekToken()
 	if first.Type == laxer.TokenString {
 		self.lastError = self.parseMapPair(buf)

@@ -2,18 +2,16 @@
  * @Author: maolong.he@gmail.com
  * @Date: 2019-11-20 14:29:57
  * @Last Modified by: maolong.he@gmail.com
- * @Last Modified time: 2019-11-21 18:52:11
+ * @Last Modified time: 2019-11-21 20:22:56
  */
 
-package parser
+package gson
 
 import (
-	"bytes"
 	"fmt"
 	"testing"
 
 	"github.com/bitly/go-simplejson"
-	"github.com/hemaolong/gson/laxer"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -58,30 +56,16 @@ var (
 func TestParser(t *testing.T) {
 
 	for _, v := range inputs {
-		fl := laxer.Lax(v.format)
-		if fl.LastError() != nil {
-			fmt.Println(v.format)
-			panic(fmt.Sprintf("lax format error:%v", fl.LastError()))
-		}
-		fmt.Println("format|", fl)
-
-		cl := laxer.Lax(v.content)
-		if cl.LastError() != nil {
-			fmt.Println(v.format)
-			panic(fmt.Sprintf("lax content error:%v", cl.LastError()))
-		}
-		fmt.Println("content|", cl)
-
-		out := bytes.Buffer{}
-		p := Parse(fl, cl)
-		p.Parse(&out)
-		fmt.Println("parse result|", out.String())
-		err := p.LastError()
+		encoder, err := NewEncoder([]byte(v.format))
 		if err != nil {
-			panic(fmt.Sprintf("parse error:%v", err))
+			panic(fmt.Sprintf("lax format error:%v", err))
+		}
+		out, err := encoder.Marshal([]byte(v.content))
+		if err != nil {
+			panic(fmt.Sprintf("marshal content error:%v", err))
 		}
 
-		realJson, err := simplejson.NewJson(out.Bytes())
+		realJson, err := simplejson.NewJson(out)
 		if err != nil {
 			panic(fmt.Sprintf("output js not valid json, unmarshal error:%v", err))
 		}
