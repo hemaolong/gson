@@ -2,9 +2,8 @@
  * @Author: maolong.he@gmail.com
  * @Date: 2019-11-21 20:04:18
  * @Last Modified by: maolong.he@gmail.com
- * @Last Modified time: 2019-11-21 20:20:05
+ * @Last Modified time: 2019-11-21 20:37:36
  */
-// github.com/hemaolong/
 package gson
 
 import (

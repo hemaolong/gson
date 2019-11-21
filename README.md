@@ -10,17 +10,21 @@ json非常适合游戏配置，但是面对大量配置的情况，自描述的�
 ---
 ```
 package main
-import "testing"
+
+import "fmt"
 import "github.com/hemaolong/gson"
 
-func TestGson(_ *testing.T) {
+func main() {
 	formatStr := "{k_str:string,array_int:[int]}"
 	contentStr := "{hemaolong, [1,2,3]}"
+
 	encoder, _ := gson.NewEncoder([]byte(formatStr))
 	output, _ := encoder.Marshal([]byte(contentStr))
 	fmt.Println("output|", string(output))
-    // {"array_int":[1,2,3],"k_str":"hemaolong"}
+
+	// {"k_str":"hemaolong","array_int":[1,2,3]}
 }
+
 ```
 
 ---
