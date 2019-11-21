@@ -6,6 +6,12 @@ json非常适合游戏配置，但是面对大量配置的情况，自描述的�
 特别是大量表格类配置，格式通常一致。格式-内容分开非常必要。
 
 
+跟普通json的差别
+- 格式、内容分离
+- 字符串类型的引号省略
+
+
+
 ### 例子
 ---
 ```
@@ -26,29 +32,35 @@ func main() {
 }
 
 ```
+Test samples
+---
+* format: `{k_int:int}`
+* content: `{999}`
+* expect:  `{"k_int":999}`
+---
+* format: `{array_int:[int]}`
+* content: `{  [1,2,3]}`
+* expect:  `{"array_int":[1,2,3]}`
+---
+* format: `{k_str:string,array_int:[int]}`
+* content: `{hemaolong,   [1,2,3]}`
+* expect:  `{"k_str":"hemaolong","array_int":[1,2,3]}`
+---
+* format: `{map_array:[{x:int,y:float, z:double}]}`
+* content: `{[{11,22,33},{55,66,77}]}`
+* expect:  `{"map_array":[{"x":11,"y":22,"z":33},{"x":55,"y":66,"z":77}]}`
+---
+* format: `{array_str:[string]}`
+* content: `{  [1,2,3]}`
+* expect:  `{"array_str":["1","2","3"]}`
+---
+* format: `{k_str:string,coopCardID:int, array_int:[int], map_array:[{x:int,y:float, z:double}], k_int:int}`
+* content: `{hemaolong, 1024, [1,2,3], [{11,22,33},{55,66,77}], 999}`
+* expect:  `{"k_int":999,"coopCardID":1024,"k_str":"hemaolong","array_int":[1,2,3],"map_array":[{"x":11,"y":22,"z":33},{"x":55,"y":66,"z":77}]}`
 
----
-* format: `{k_int:int}`,
-* content: `{999}`,
-* expect:  `{"k_int":999}`,
----
-* format: `{array_int:[int]}`,
-* content: `{  [1,2,3]}`,
-* expect:  `{"array_int":[1,2,3]}`,
----
-* format: `{k_str:string,array_int:[int]}`,
-* content: `{hemaolong,   [1,2,3]}`,
-* expect:  `{"k_str":"hemaolong","array_int":[1,2,3]}`,
----
-* format: `{map_array:[{x:int,y:float, z:double}]}`,
-* content: `{[{11,22,33},{55,66,77}]}`,
-* expect:  `{"map_array":[{"x":11,"y":22,"z":33},{"x":55,"y":66,"z":77}]}`,
----
-* format: `{array_str:[string]}`,
-* content: `{  [1,2,3]}`,
-* expect:  `{"array_str":["1","2","3"]}`,
----
-* format: `{k_str:string,coopCardID:int, array_int:[int], map_array:[{x:int,y:float, z:double}], k_int:int}`,
-* content: `{hemaolong, 1024, [1,2,3], [{11,22,33},{55,66,77}], 999}`,
-* expect:  `{"k_int":999,"coopCardID":1024,"k_str":"hemaolong","array_int":[1,2,3],"map_array":[{"x":11,"y":22,"z":33},{"x":55,"y":66,"z":77}]}`,
+
+---  
+* format: `[[string]]`
+* content: `[[1,6,8],[2]]`
+* expect:  `[["1","6","8"],["2"]]`
 

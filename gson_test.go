@@ -50,6 +50,16 @@ var (
 			content: `{hemaolong, 1024, [1,2,3], [{11,22,33},{55,66,77}], 999}`,
 			expect:  `{"k_int":999,"coopCardID":1024,"k_str":"hemaolong","array_int":[1,2,3],"map_array":[{"x":11,"y":22,"z":33},{"x":55,"y":66,"z":77}]}`,
 		},
+
+		// arrays
+		testInput{format: `[[int]]`,
+			content: `[[1,6,8],[2]]`,
+			expect:  `[[1,6,8],[2]]`,
+		},
+		testInput{format: `[[string]]`,
+			content: `[[1,6,8],[2]]`,
+			expect:  `[["1","6","8"],["2"]]`,
+		},
 	}
 )
 
