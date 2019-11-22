@@ -196,7 +196,16 @@ func (self *Parser) parsePrimitiveField(buf *bytes.Buffer, typeToken *laxer.Toke
 	}
 
 	if typeToken.Ultra == "string" {
-		buf.WriteString(strconv.Quote(contentToken.Value))
+		lv := len(contentToken.Value)
+		if lv > 0 {
+			if contentToken.Value[0] == '"' && contentToken.Value[lv-1] == '"' {
+				// 自带引号分割的字符串
+				buf.WriteString(contentToken.Value)
+			} else {
+				buf.WriteString(strconv.Quote(contentToken.Value))
+			}
+		}
+		// buf.WriteString(strconv.Quote(contentToken.Value))
 	} else {
 		buf.WriteString(contentToken.Value)
 	}

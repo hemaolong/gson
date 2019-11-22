@@ -60,6 +60,16 @@ var (
 			content: `[[1,6,8],[2]]`,
 			expect:  `[["1","6","8"],["2"]]`,
 		},
+
+		// escapes
+		testInput{format: `[[string]]`,
+			content: `[["heml1,-,",6,8],[2]]`,
+			expect:  `[["heml1,-,"  ,"6","8"],["2"]]`,
+		},
+		testInput{format: `[[string]]`,
+			content: `[["heml1,-\n,\"",6,8],[2]]`,
+			expect:  `[["heml1,-\n,\""  ,"6","8"],["2"]]`,
+		},
 	}
 )
 

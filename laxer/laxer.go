@@ -111,7 +111,7 @@ func (self *Laxer) LastError() *Token {
 }
 
 func (self *Laxer) peekLaxStrPos() string {
-	start := self.nextPos - 10
+	start := self.nextPos
 	if start < 0 {
 		start = 0
 	}
@@ -162,24 +162,54 @@ func (self *Laxer) pushError(err error) {
 	self.tokens = append(self.tokens, &Token{Type: TokenError, Value: err.Error()})
 }
 
+// func unscape(s string) string {
+// 	if len(s) == 0 {
+// 		return s
+// 	}
+// 	buf := make([]byte, 0, len(s))
+// 	isEscape := false
+// 	for i := 0; i < len(s); i++ {
+// 		c := s[i]
+// 		if c == '\\' {
+// 			isEscape = true
+// 			continue
+// 		}
+// 		if isEscape {
+// 			isEscape = false
+// 		}
+// 		buf = append(buf, c)
+// 	}
+// 	s = string(buf)
+// 	return s
+// }
+
 func (self *Laxer) genToken() *Token {
 	ls := len(self.input)
 	if self.nextPos >= ls {
 		return nil
 	}
 
-	preIsEscape := false
+	preCharIsEscape := false
+	duringQuotedString := false
 	for k := self.nextPos; k < ls; k++ {
-		if preIsEscape {
-			preIsEscape = false
+		if preCharIsEscape {
+			preCharIsEscape = false
 			continue
 		}
 		char := byte(self.input[k])
-		preIsEscape = isEscape(char)
-		if preIsEscape {
+		isQuote := char == '"'
+		if !duringQuotedString {
+			duringQuotedString = isQuote
+		} else {
+			if isQuote {
+				duringQuotedString = false
+			}
+		}
+
+		preCharIsEscape = isEscape(char)
+		if duringQuotedString {
 			continue
 		}
-		preIsEscape = false
 
 		if !isPlain(TokenType(char)) {
 			if k > self.nextPos {
@@ -225,7 +255,7 @@ func (self *Laxer) laxBegin(cur *Token) {
 	case TokenString:
 		// fmt.Println("nothing todo")
 	default:
-		panic(cur)
+		self.pushError(fmt.Errorf(`invalid json format '%s'...`, self.peekLaxStrPos()))
 	}
 	// fmt.Println("push token|", t)
 }
@@ -245,6 +275,13 @@ func (self *Laxer) laxArray() {
 
 		self.laxBegin(nextEle)
 		nextEle = self.genToken()
+		if self.LastError() != nil {
+			return
+		}
+		if nextEle == nil {
+			self.pushError(fmt.Errorf(`expect array end but found EOF '%s'...`, self.peekLaxStrPos()))
+			return
+		}
 		// self.push(nextEle)
 		if nextEle.Type == TokenArrayEnd {
 			self.push(nextEle)
