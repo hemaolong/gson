@@ -70,6 +70,12 @@ var (
 			content: `[["heml1,-\n,\"",6,8],[2]]`,
 			expect:  `[["heml1,-\n,\""  ,"6","8"],["2"]]`,
 		},
+
+		// ellipsis empty fields
+		testInput{format: `{array_str:[string],born_date:int}`,
+			content: `{  [1024]}`,
+			expect:  `{"array_str":["1024"]}`,
+		},
 	}
 )
 
