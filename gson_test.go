@@ -76,6 +76,25 @@ var (
 			content: `{  [1024]}`,
 			expect:  `{"array_str":["1024"]}`,
 		},
+
+		// bool - false(default)
+		testInput{format: `{array_str:[string],is_ok:bool}`,
+			content: `{  [1024], 0}`,
+			expect:  `{"array_str":["1024"]}`,
+		},
+		testInput{format: `{array_str:[string],is_ok:bool}`,
+			content: `{  [1024], false}`,
+			expect:  `{"array_str":["1024"]}`,
+		},
+		// bool-true
+		testInput{format: `{array_str:[string],is_ok:bool}`,
+			content: `{  [1024], true}`,
+			expect:  `{"array_str":["1024"],"is_ok":true}`,
+		},
+		testInput{format: `{array_str:[string],is_ok:bool}`,
+			content: `{  [1024], 121}`,
+			expect:  `{"array_str":["1024"],"is_ok":true}`,
+		},
 	}
 )
 
@@ -93,20 +112,22 @@ func TestParser(t *testing.T) {
 
 		realJson, err := simplejson.NewJson(out)
 		if err != nil {
-			panic(fmt.Sprintf("output js not valid json, unmarshal error:%v", err))
+			fmt.Println("output|", string(out))
+			panic(fmt.Sprintf("output not valid json, unmarshal error:%v", err))
 		}
 		realStr, err := realJson.MarshalJSON()
 		if err != nil {
-			panic(fmt.Sprintf("output js not valid json, marshal error:%v", err))
+			panic(fmt.Sprintf("output not valid json, marshal error:%v", err))
 		}
 
 		expectJson, err := simplejson.NewJson([]byte(v.expect))
 		if err != nil {
-			panic(fmt.Sprintf("expect js not valid json, unmarshal error:%v", err))
+			fmt.Println("expect|", string(out))
+			panic(fmt.Sprintf("expect not valid json, unmarshal error:%v", err))
 		}
 		expectStr, err := expectJson.MarshalJSON()
 		if err != nil {
-			panic(fmt.Sprintf("expect js not valid json, marshal error:%v", err))
+			panic(fmt.Sprintf("expect not valid json, marshal error:%v", err))
 		}
 		fmt.Println("expect|", string(expectStr))
 		fmt.Println("  real|", string(realStr))

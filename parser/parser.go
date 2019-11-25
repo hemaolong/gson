@@ -54,7 +54,7 @@ func (self *Parser) Parse(content *laxer.Laxer, buf *bytes.Buffer) {
 
 	first := self.content.PeekToken()
 	if first.Type == laxer.TokenString {
-		self.lastError = self.parseMapPair(buf)
+		_, self.lastError = self.parseMapPair(buf)
 	} else {
 		self.doParse(buf)
 	}
@@ -101,7 +101,6 @@ func (self *Parser) parseArray(buf *bytes.Buffer) {
 	formatT := self.format.PopFirst() // Pop '['
 	initFormatPos := self.format.GetStackPos()
 
-	needComma := false
 	buf.WriteByte('[')
 	for {
 		if self.Finished() {
@@ -112,9 +111,6 @@ func (self *Parser) parseArray(buf *bytes.Buffer) {
 			self.content.PopFirst()
 			break
 		}
-		if needComma {
-			buf.WriteByte(',')
-		}
 
 		// 数组类型的格式配置，只会配置一个元素的格式，默认所有格式相同。所以需要复位
 		self.format.SetStackPos(initFormatPos)
@@ -124,9 +120,10 @@ func (self *Parser) parseArray(buf *bytes.Buffer) {
 		} else {
 			self.doParse(buf)
 		}
-
-		needComma = true
+		buf.WriteByte(',')
 	}
+	buf.Truncate(buf.Len() - 1)
+
 	self.format.PopFirst() // Pop ']'
 	// fmt.Println("pop array", initFormatPos, ttt)
 	buf.WriteByte(']')
@@ -140,7 +137,6 @@ func (self *Parser) parseMap(buf *bytes.Buffer) {
 		return
 	}
 
-	needComma := false
 	buf.WriteByte('{')
 	for {
 		if self.Finished() {
@@ -151,12 +147,14 @@ func (self *Parser) parseMap(buf *bytes.Buffer) {
 			break
 		}
 
-		if needComma {
+		isDefaultValue := false
+		isDefaultValue, self.lastError = self.parseMapPair(buf)
+		if !isDefaultValue {
 			buf.WriteByte(',')
 		}
-		self.lastError = self.parseMapPair(buf)
-		needComma = true
 	}
+	// truncate the last ','
+	buf.Truncate(buf.Len() - 1)
 	self.format.PopFirst()
 	// fmt.Println("----map pop format--", ttt)
 	self.content.PopFirst()
@@ -164,25 +162,42 @@ func (self *Parser) parseMap(buf *bytes.Buffer) {
 
 }
 
-func (self *Parser) parseMapPair(buf *bytes.Buffer) error {
+// return hasData, error
+func (self *Parser) parseMapPair(buf *bytes.Buffer) (bool, error) {
 	if self.lastError != nil {
-		return self.lastError
+		return false, self.lastError
 	}
 
 	keyToken := self.format.PopFirst()
 	if keyToken == nil {
 		// self.format.IncrTokenPos(-1)
-		return fmt.Errorf("expect key, but found EOF")
+		return false, fmt.Errorf("expect key, but found EOF")
 	}
 	if keyToken.Type == laxer.TokenString {
+		prePos := buf.Len()
 		buf.WriteString(strconv.Quote(keyToken.Value))
 		buf.WriteByte(':')
-		self.parseMapValue(buf, keyToken)
+		// self.parseMapValue(buf, keyToken)
+		if self.lastError != nil {
+			return false, self.lastError
+		}
+
+		if len(keyToken.Ultra) != 0 {
+			isDefault := self.parsePrimitiveField(buf, keyToken)
+			if isDefault {
+				buf.Truncate(prePos)
+			}
+			return isDefault, nil
+		}
+		self.doParse(buf)
 	}
-	return self.lastError // fmt.Errorf("expect key, map field expect string, but found:%v", keyToken)
+	return false, self.lastError // fmt.Errorf("expect key, map field expect string, but found:%v", keyToken)
 }
 
-func (self *Parser) parsePrimitiveField(buf *bytes.Buffer, typeToken *laxer.Token) {
+// return if is default value
+// 返回是否是默认值，调用者可以根据返回值确定是否省略字段
+func (self *Parser) parsePrimitiveField(buf *bytes.Buffer, typeToken *laxer.Token) (isDefaultValue bool) {
+	isDefaultValue = false
 	if self.lastError != nil {
 		return
 	}
@@ -207,20 +222,15 @@ func (self *Parser) parsePrimitiveField(buf *bytes.Buffer, typeToken *laxer.Toke
 			}
 		}
 		// buf.WriteString(strconv.Quote(contentToken.Value))
+	} else if typeToken.Ultra == "bool" {
+		if len(contentToken.Value) == 0 || contentToken.Value == "0" || contentToken.Value == "false" {
+			buf.WriteString("false")
+			isDefaultValue = true
+		} else {
+			buf.WriteString("true")
+		}
 	} else {
 		buf.WriteString(contentToken.Value)
 	}
-}
-
-// map-value 字段类型跟值一一对应
-func (self *Parser) parseMapValue(buf *bytes.Buffer, t *laxer.Token) {
-	if self.lastError != nil {
-		return
-	}
-
-	if len(t.Ultra) != 0 {
-		self.parsePrimitiveField(buf, t)
-		return
-	}
-	self.doParse(buf)
+	return
 }
