@@ -80,8 +80,6 @@ func (self *Laxer) String() string {
 
 // 只有格式 laxer需要调用，将带':'的字符串类型拆分成两个Token
 func (self *Laxer) InitFormat() {
-	self.stackPos = 0
-
 	for _, v := range self.tokens {
 		if v.Type == TokenString {
 			tmp := strings.Split(v.Value, ":")
@@ -241,7 +239,11 @@ func isPlain(c TokenType) bool {
 }
 
 func (self *Laxer) run() {
-	self.laxBegin(self.genToken())
+	t := self.genToken()
+	if t == nil {
+		panic(fmt.Sprintf("fail to find token|%v", self.input))
+	}
+	self.laxBegin(t)
 }
 
 func (self *Laxer) laxBegin(cur *Token) {

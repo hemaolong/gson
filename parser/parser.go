@@ -44,11 +44,12 @@ type Parser struct {
 }
 
 func Parse(format *laxer.Laxer) *Parser {
+	format.InitFormat()
 	return &Parser{format: format}
 }
 
 func (self *Parser) Parse(content *laxer.Laxer, buf *bytes.Buffer) {
-	self.format.InitFormat()
+	self.format.SetStackPos(0)
 	self.content = content
 
 	first := self.content.PeekToken()
