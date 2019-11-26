@@ -23,8 +23,8 @@ const (
 	TokenArrayBegin TokenType = '['
 	TokenArrayEnd   TokenType = ']'
 
-	TokenMapBegin TokenType = '{'
-	TokenMapEnd   TokenType = '}'
+	TokenObjectBegin TokenType = '{'
+	TokenObjectEnd   TokenType = '}'
 
 	TokenComma TokenType = ','
 	// TokenColon TokenType = ':'
@@ -38,6 +38,8 @@ type Token struct {
 
 	// 作为一个类型Token，表示类型的Type：string int？
 	Ultra string
+
+	IsMap bool // json不支持map，扩展
 }
 
 type Laxer struct {
@@ -80,10 +82,16 @@ func (self *Laxer) String() string {
 
 // 只有格式 laxer需要调用，将带':'的字符串类型拆分成两个Token
 func (self *Laxer) InitFormat() {
-	for _, v := range self.tokens {
+	hasMap := false
+	for k, v := range self.tokens {
 		if v.Type == TokenString {
 			tmp := strings.Split(v.Value, ":")
 			v.Value = tmp[0]
+			if v.Value == "map" {
+				lastToken := self.tokens[k-1]
+				lastToken.IsMap = true
+				hasMap = true
+			}
 			if len(tmp) >= 2 {
 				v.Ultra = tmp[1]
 			} else {
@@ -92,6 +100,16 @@ func (self *Laxer) InitFormat() {
 				v.Ultra = tmp[0]
 			}
 		}
+	}
+	if hasMap {
+		preTokens := self.tokens
+		self.tokens = make([]*Token, 0, len(self.tokens))
+		for _, v := range preTokens {
+			if v.Value != "map" {
+				self.tokens = append(self.tokens, v)
+			}
+		}
+		// map类型有多余字段，必须去掉
 	}
 }
 
@@ -234,7 +252,7 @@ func isEscape(c byte) bool {
 
 func isPlain(c TokenType) bool {
 	return c != TokenArrayBegin && c != TokenArrayEnd &&
-		c != TokenMapBegin && c != TokenMapEnd &&
+		c != TokenObjectBegin && c != TokenObjectEnd &&
 		c != TokenComma
 }
 
@@ -252,7 +270,7 @@ func (self *Laxer) laxBegin(cur *Token) {
 	case TokenArrayBegin:
 		self.laxArray()
 
-	case TokenMapBegin:
+	case TokenObjectBegin:
 		self.laxMap()
 	case TokenString:
 		// fmt.Println("nothing todo")
@@ -303,7 +321,7 @@ func (self *Laxer) laxMap() {
 			return
 		}
 		// 剩余字符应该是',' or '?'
-		if nextEle.Type == TokenMapEnd {
+		if nextEle.Type == TokenObjectEnd {
 			self.push(nextEle)
 			return
 		}
@@ -317,7 +335,7 @@ func (self *Laxer) laxMap() {
 			self.pushError(fmt.Errorf(`expect map end but found EOF '%s'...`, self.peekLaxStrPos()))
 			return
 		}
-		if nextEle.Type == TokenMapEnd {
+		if nextEle.Type == TokenObjectEnd {
 			self.push(nextEle)
 			return
 		}

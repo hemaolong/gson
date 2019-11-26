@@ -27,15 +27,6 @@ func (self *GsonType) String() string {
 	return fmt.Sprintf("%c", *self)
 }
 
-type gsonMap map[string]interface{}
-type gsonArray []interface{}
-type gsonPrimitive string
-
-type GsonObject struct {
-	Type  GsonType
-	Value interface{}
-}
-
 type Parser struct {
 	format  *laxer.Laxer
 	content *laxer.Laxer
@@ -54,7 +45,7 @@ func (self *Parser) Parse(content *laxer.Laxer, buf *bytes.Buffer) {
 
 	first := self.content.PeekToken()
 	if first.Type == laxer.TokenString {
-		_, self.lastError = self.parseMapPair(buf)
+		_, self.lastError = self.parseObjectPair(buf)
 	} else {
 		self.doParse(buf)
 	}
@@ -86,12 +77,12 @@ func (self *Parser) doParse(buf *bytes.Buffer) {
 	case laxer.TokenArrayBegin:
 		self.content.IncrTokenPos(-1)
 		self.parseArray(buf)
-	case laxer.TokenMapBegin:
+	case laxer.TokenObjectBegin:
 		self.content.IncrTokenPos(-1)
-		self.parseMap(buf)
+		self.parseObject(buf)
 
 	default:
-		self.lastError = fmt.Errorf("unsupoorted token:%v", v)
+		self.lastError = fmt.Errorf("supported token:%v", v)
 	}
 }
 
@@ -129,11 +120,16 @@ func (self *Parser) parseArray(buf *bytes.Buffer) {
 	buf.WriteByte(']')
 }
 
-func (self *Parser) parseMap(buf *bytes.Buffer) {
+func (self *Parser) parseObject(buf *bytes.Buffer) {
 	formatT := self.format.PopFirst()
 	contentT := self.content.PopFirst()
-	if formatT.Type != contentT.Type || formatT.Type != laxer.TokenMapBegin {
-		self.lastError = fmt.Errorf("invalid map field. format:%v content:%v", formatT, contentT)
+	if formatT.Type != contentT.Type || formatT.Type != laxer.TokenObjectBegin {
+		self.lastError = fmt.Errorf("invalid object field. format:%v content:%v", formatT, contentT)
+		return
+	}
+	if formatT.IsMap {
+		self.content.IncrTokenPos(-1)
+		self.parseMap(buf)
 		return
 	}
 
@@ -143,15 +139,11 @@ func (self *Parser) parseMap(buf *bytes.Buffer) {
 			return
 		}
 		contentT := self.content.PeekToken()
-		if contentT.Type == laxer.TokenMapEnd {
+		if contentT.Type == laxer.TokenObjectEnd {
 			break
 		}
 
-		isDefaultValue := false
-		isDefaultValue, self.lastError = self.parseMapPair(buf)
-		if !isDefaultValue {
-			buf.WriteByte(',')
-		}
+		_, self.lastError = self.parseObjectPair(buf)
 	}
 	// truncate the last ','
 	buf.Truncate(buf.Len() - 1)
@@ -162,8 +154,50 @@ func (self *Parser) parseMap(buf *bytes.Buffer) {
 
 }
 
+func (self *Parser) parseMap(buf *bytes.Buffer) {
+	self.content.PopFirst()
+	// contentT := self.content.PopFirst()
+	// if formatT.Type != contentT.Type || formatT.Type != laxer.TokenObjectBegin {
+	// 	self.lastError = fmt.Errorf("invalid map field. format:%v content:%v", formatT, contentT)
+	// 	return
+	// }
+
+	buf.WriteByte('{')
+	for {
+		if self.Finished() {
+			return
+		}
+		conentKey := self.content.PopFirst()
+		if conentKey.Type == laxer.TokenObjectEnd {
+			break
+		}
+		prePos := buf.Len()
+		buf.WriteString(strconv.Quote(conentKey.Value))
+		buf.WriteByte(':')
+
+		contentValue := self.content.PeekToken()
+		if contentValue.Type == laxer.TokenString {
+			formatT := self.format.PopFirst()
+			isDefault := self.parsePrimitiveField(buf, formatT)
+			if isDefault {
+				buf.Truncate(prePos)
+			}
+		} else {
+			self.doParse(buf)
+		}
+		buf.WriteByte(',')
+	}
+	// truncate the last ','
+	buf.Truncate(buf.Len() - 1)
+	self.format.PopFirst()
+
+	self.content.PopFirst()
+	buf.WriteByte('}')
+
+}
+
 // return hasData, error
-func (self *Parser) parseMapPair(buf *bytes.Buffer) (bool, error) {
+func (self *Parser) parseObjectPair(buf *bytes.Buffer) (bool, error) {
 	if self.lastError != nil {
 		return false, self.lastError
 	}
@@ -177,7 +211,7 @@ func (self *Parser) parseMapPair(buf *bytes.Buffer) (bool, error) {
 		prePos := buf.Len()
 		buf.WriteString(strconv.Quote(keyToken.Value))
 		buf.WriteByte(':')
-		// self.parseMapValue(buf, keyToken)
+		// self.parseObjectValue(buf, keyToken)
 		if self.lastError != nil {
 			return false, self.lastError
 		}
@@ -186,10 +220,13 @@ func (self *Parser) parseMapPair(buf *bytes.Buffer) (bool, error) {
 			isDefault := self.parsePrimitiveField(buf, keyToken)
 			if isDefault {
 				buf.Truncate(prePos)
+			} else {
+				buf.WriteByte(',')
 			}
 			return isDefault, nil
 		}
 		self.doParse(buf)
+		buf.WriteByte(',')
 	}
 	return false, self.lastError // fmt.Errorf("expect key, map field expect string, but found:%v", keyToken)
 }
@@ -204,11 +241,9 @@ func (self *Parser) parsePrimitiveField(buf *bytes.Buffer, typeToken *laxer.Toke
 
 	// 以value为准，允许value省略后续字段
 	contentToken := self.content.PopFirst()
-	if typeToken.Type != laxer.TokenString || contentToken.Type != laxer.TokenString {
-		if typeToken.Type != laxer.TokenString {
-			self.lastError = fmt.Errorf("miss array value type :%v content:%v", typeToken, contentToken)
-			return
-		}
+	if typeToken.Type != laxer.TokenString {
+		self.lastError = fmt.Errorf("miss array value type :%v content:%v", typeToken, contentToken)
+		return
 	}
 
 	if typeToken.Ultra == "string" {
