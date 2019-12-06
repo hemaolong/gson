@@ -2,7 +2,7 @@
  * @Author: maolong.he@gmail.com
  * @Date: 2019-11-20 14:29:57
  * @Last Modified by: maolong.he@gmail.com
- * @Last Modified time: 2019-11-21 20:22:56
+ * @Last Modified time: 2019-11-28 10:57:17
  */
 
 package gson
@@ -96,7 +96,7 @@ var (
 			expect:  `{"array_str":["1024"],"is_ok":true}`,
 		},
 
-		testInput{format: `{map:{{group:int,id:int,count:int}}}`,
+		testInput{format: `{map:{group:int,id:int,count:int}}`,
 			content: `{1,{101,102,103}}`,
 			expect:  `{"1":{"group":101,"id":102,"count":103}}`,
 		},
